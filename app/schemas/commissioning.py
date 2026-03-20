@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 
 # --- CommissioningRecord ---
@@ -24,7 +24,7 @@ class CommissioningRecordUpdate(BaseModel):
     description: Optional[str] = None
     assigned_to: Optional[str] = None
     witness_id: Optional[str] = None
-    overall_status: Optional[str] = None
+    overall_status: Optional[Literal["not_started", "in_progress", "completed", "failed"]] = None
 
 
 class CommissioningRecordOut(BaseModel):
@@ -130,12 +130,12 @@ class PunchItemCreate(BaseModel):
     commissioning_record_id: int
     stage_id: Optional[int] = None
     description: str
-    severity: str  # critical / major / minor
+    severity: Literal["critical", "major", "minor"]
     raised_by: str
 
 
 class PunchItemUpdate(BaseModel):
-    status: Optional[str] = None  # open / closed
+    status: Optional[Literal["open", "closed"]] = None
     closed_by: Optional[str] = None
     closed_at: Optional[datetime] = None
     closure_notes: Optional[str] = None

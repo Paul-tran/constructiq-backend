@@ -1,6 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 
 
 # --- Document ---
@@ -22,7 +22,7 @@ class DocumentUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[str] = None
     drawing_type: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["draft", "under_review", "approved", "superseded"]] = None
     version: Optional[str] = None
     description: Optional[str] = None
     site_id: Optional[int] = None

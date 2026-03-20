@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
+from app.core.limiter import limiter
 
 from app.models.document import Document, DocumentRevision, DocumentApproval, DocumentComment, DrawingAsset
 from app.models.asset import Asset
@@ -151,7 +152,9 @@ async def delete_pin(pin_id: int):
 # --- Drawing Intelligence ---
 
 @router.post("/documents/{doc_id}/analyze", response_model=List[DrawingAssetOut])
+@limiter.limit("10/minute")
 async def analyze_document(
+    request: Request,
     doc_id: int,
     page: int = 1,
     current_user: ClerkUser = Depends(get_current_user),

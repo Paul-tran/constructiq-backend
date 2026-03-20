@@ -1,7 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Literal
+
+ASSET_STATUSES = {"active", "inactive", "maintenance"}
 
 
 # --- Asset ---
@@ -24,12 +26,20 @@ class AssetCreate(BaseModel):
     po_number: Optional[str] = None
     delivery_date: Optional[date] = None
     warranty_expiry: Optional[date] = None
+    status: Literal["active", "inactive", "maintenance"] = "active"
+
+    @field_validator("tag")
+    @classmethod
+    def tag_not_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Tag cannot be empty")
+        return v.strip().upper()
 
 
 class AssetUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
-    status: Optional[str] = None
+    status: Optional[Literal["active", "inactive", "maintenance"]] = None
     description: Optional[str] = None
     location_id: Optional[int] = None
     unit_id: Optional[int] = None

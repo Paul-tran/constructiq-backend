@@ -1,7 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
 from pydantic import BaseModel
 
 from app.core.auth import get_current_user, ClerkUser
+from app.core.limiter import limiter
 from app.services.storage import make_file_key, upload_file, get_presigned_url, delete_file
 
 router = APIRouter(prefix="/files", tags=["File Storage"])
@@ -33,7 +34,9 @@ class PresignedUrlResponse(BaseModel):
 
 
 @router.post("/upload", response_model=UploadResponse, status_code=201)
+@limiter.limit("30/minute")
 async def upload(
+    request: Request,
     module: str,
     project_id: int,
     file: UploadFile = File(...),
