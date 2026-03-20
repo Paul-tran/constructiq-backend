@@ -1,0 +1,48 @@
+databases:
+  - name: constructiq-db
+    databaseName: constructiq
+    user: constructiq
+    plan: free
+
+services:
+  - type: web
+    name: constructiq-api
+    plan: free
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+
+      # Auto-populated from the linked database above
+      - key: DATABASE_URL
+        fromDatabase:
+          name: constructiq-db
+          property: connectionString
+
+      # Set these manually in the Render dashboard after deploying
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
+      # Cloudflare R2 (production file storage)
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_ACCESS_KEY
+        sync: false
+      - key: R2_SECRET_KEY
+        sync: false
+      - key: R2_BUCKET
+        value: constructiq-files
+
+      # Set to your Vercel frontend URL after deploying frontend
+      - key: ALLOWED_ORIGINS
+        sync: false
