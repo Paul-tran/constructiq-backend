@@ -19,6 +19,7 @@ TORTOISE_ORM = {
                 "app.models.document",
                 "app.models.asset",
                 "app.models.commissioning",
+                "app.models.billing",
                 "aerich.models",
             ],
             "default_connection": "default",

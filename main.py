@@ -6,7 +6,7 @@ import os
 
 from app.core.database import TORTOISE_ORM
 from app.core.auth import get_current_user
-from app.routers import geography, company, project, user, document, asset, commissioning, upload
+from app.routers import geography, company, project, user, document, asset, commissioning, upload, billing
 
 load_dotenv()
 
@@ -38,6 +38,9 @@ app.include_router(document.router, prefix="/api/v1", **protected)
 app.include_router(asset.router, prefix="/api/v1", **protected)
 app.include_router(commissioning.router, prefix="/api/v1", **protected)
 app.include_router(upload.router, prefix="/api/v1")
+# Webhook is public — Stripe signs requests, no Clerk token
+app.include_router(billing.router, prefix="/api/v1", dependencies=[])
+# Checkout + portal are protected inside the billing router via Depends(get_current_user)
 
 register_tortoise(
     app,
