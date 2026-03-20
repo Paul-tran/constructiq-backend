@@ -33,6 +33,7 @@ services:
     environment:
       MINIO_ROOT_USER: constructiq
       MINIO_ROOT_PASSWORD: constructiq123
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"

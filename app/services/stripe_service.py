@@ -1,12 +1,17 @@
 import os
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import stripe
 from fastapi import HTTPException
 
 from app.models.billing import Subscription
+
+
+def _is_dev_mode() -> bool:
+    key = os.getenv("STRIPE_SECRET_KEY", "")
+    return not key or key == "your-stripe-secret-key"
 
 
 def _get_stripe():
@@ -182,3 +187,45 @@ async def _on_payment_succeeded(invoice: dict) -> None:
     if sub and sub.status == "past_due":
         sub.status = "active"
         await sub.save()
+
+
+# --- Dev-mode simulation (no real Stripe keys needed) ---
+
+async def simulate_checkout(clerk_user_id: str, scenario: str) -> dict:
+    """
+    Simulate a Stripe billing event without real keys.
+    scenario: "trial" | "active" | "past_due" | "canceled"
+    """
+    now = datetime.now(tz=timezone.utc)
+    fake_customer = f"cus_SIMULATED_{clerk_user_id[-8:]}"
+    fake_sub = f"sub_SIMULATED_{clerk_user_id[-8:]}"
+
+    status_map = {
+        "trial": ("trialing", now + timedelta(days=14), now + timedelta(days=14)),
+        "active": ("active", None, now + timedelta(days=30)),
+        "past_due": ("past_due", None, now - timedelta(days=1)),
+        "canceled": ("canceled", None, now - timedelta(days=1)),
+    }
+    if scenario not in status_map:
+        raise HTTPException(status_code=400, detail=f"Unknown scenario: {scenario}. Use: trial, active, past_due, canceled")
+
+    status, trial_ends_at, period_end = status_map[scenario]
+
+    sub, created = await Subscription.get_or_create(
+        clerk_user_id=clerk_user_id,
+        defaults={"stripe_customer_id": fake_customer, "status": status},
+    )
+    sub.stripe_customer_id = fake_customer
+    sub.stripe_subscription_id = fake_sub
+    sub.status = status
+    sub.trial_ends_at = trial_ends_at
+    sub.current_period_end = period_end
+    await sub.save()
+
+    return {
+        "simulated": True,
+        "scenario": scenario,
+        "status": status,
+        "trial_ends_at": trial_ends_at.isoformat() if trial_ends_at else None,
+        "current_period_end": period_end.isoformat() if period_end else None,
+    }

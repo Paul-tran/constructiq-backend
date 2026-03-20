@@ -8,6 +8,7 @@ from app.services.stripe_service import (
     create_checkout_session,
     create_portal_session,
     handle_webhook_event,
+    simulate_checkout,
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
@@ -55,6 +56,22 @@ async def open_portal(
         return_url=f"{origin}/dashboard/billing",
     )
     return PortalResponse(url=url)
+
+
+@router.post("/simulate/{scenario}", tags=["Billing (Dev Only)"])
+async def simulate_billing(
+    scenario: str,
+    current_user: ClerkUser = Depends(get_current_user),
+):
+    """
+    DEV ONLY — simulate a billing state without real Stripe keys.
+    scenario: trial | active | past_due | canceled
+    """
+    import os
+    if os.getenv("APP_ENV", "development") != "development":
+        raise HTTPException(status_code=403, detail="Simulation only available in development")
+    result = await simulate_checkout(current_user.user_id, scenario)
+    return result
 
 
 @router.post("/webhook", status_code=200)

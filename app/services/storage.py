@@ -9,7 +9,19 @@ APP_ENV = os.getenv("APP_ENV", "development")
 
 # --- Client factory ---
 
+def _make_minio_client(endpoint: str):
+    secure = os.getenv("MINIO_SECURE", "False").lower() == "true"
+    return boto3.client(
+        "s3",
+        endpoint_url=f"{'https' if secure else 'http'}://{endpoint}",
+        aws_access_key_id=os.getenv("MINIO_ACCESS_KEY", "constructiq"),
+        aws_secret_access_key=os.getenv("MINIO_SECRET_KEY", "constructiq123"),
+        config=Config(signature_version="s3v4"),
+        region_name="us-east-1",
+    )
+
 def _get_client():
+    """Internal client — uses Docker service hostname for server-to-server calls."""
     if APP_ENV == "production":
         return boto3.client(
             "s3",
@@ -19,16 +31,19 @@ def _get_client():
             config=Config(signature_version="s3v4"),
         ), os.getenv("R2_BUCKET", "constructiq-files")
     else:
-        secure = os.getenv("MINIO_SECURE", "False").lower() == "true"
-        endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000")
-        return boto3.client(
-            "s3",
-            endpoint_url=f"{'https' if secure else 'http'}://{endpoint}",
-            aws_access_key_id=os.getenv("MINIO_ACCESS_KEY", "constructiq"),
-            aws_secret_access_key=os.getenv("MINIO_SECRET_KEY", "constructiq123"),
-            config=Config(signature_version="s3v4"),
-            region_name="us-east-1",  # Required by boto3, ignored by MinIO
-        ), os.getenv("MINIO_BUCKET", "constructiq-files")
+        return _make_minio_client(os.getenv("MINIO_ENDPOINT", "minio:9000")), \
+               os.getenv("MINIO_BUCKET", "constructiq-files")
+
+def _get_public_client():
+    """Presigned-URL client — endpoint must match what the browser will use."""
+    if APP_ENV == "production":
+        return _get_client()
+    # In dev, browsers reach MinIO via localhost:9000 (Docker port binding).
+    # The presigned signature is computed from the endpoint_url, so it must
+    # match the host the browser actually sends requests to.
+    public_endpoint = os.getenv("MINIO_PUBLIC_ENDPOINT", "localhost:9000")
+    return _make_minio_client(public_endpoint), \
+           os.getenv("MINIO_BUCKET", "constructiq-files")
 
 
 def _ensure_bucket(client, bucket: str):
@@ -70,14 +85,13 @@ def upload_file(file_bytes: bytes, file_key: str, content_type: str) -> str:
 
 def get_presigned_url(file_key: str, expires: int = 3600) -> str:
     """Return a presigned URL valid for `expires` seconds."""
-    client, bucket = _get_client()
+    client, bucket = _get_public_client()
     try:
-        url = client.generate_presigned_url(
+        return client.generate_presigned_url(
             "get_object",
             Params={"Bucket": bucket, "Key": file_key},
             ExpiresIn=expires,
         )
-        return url
     except ClientError as e:
         raise HTTPException(status_code=500, detail=f"Could not generate URL: {e}")
 
