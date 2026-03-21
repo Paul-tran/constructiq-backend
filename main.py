@@ -13,7 +13,7 @@ import logging
 from app.core.database import TORTOISE_ORM
 from app.core.auth import get_current_user
 from app.core.limiter import limiter
-from app.routers import geography, company, project, user, document, asset, commissioning, upload, billing
+from app.routers import geography, company, project, user, document, asset, commissioning, upload, billing, workorder, wo_types, system
 
 load_dotenv()
 
@@ -81,6 +81,9 @@ app.include_router(user.router, prefix="/api/v1", **protected)
 app.include_router(document.router, prefix="/api/v1", **protected)
 app.include_router(asset.router, prefix="/api/v1", **protected)
 app.include_router(commissioning.router, prefix="/api/v1", **protected)
+app.include_router(wo_types.router, prefix="/api/v1", **protected)
+app.include_router(workorder.router, prefix="/api/v1", **protected)
+app.include_router(system.router, prefix="/api/v1", **protected)
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1", dependencies=[])
 

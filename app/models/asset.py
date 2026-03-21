@@ -23,6 +23,8 @@ class Asset(Model):
     po_number = fields.CharField(max_length=100, null=True)
     delivery_date = fields.DateField(null=True)
     warranty_expiry = fields.DateField(null=True)
+    parent = fields.ForeignKeyField("models.Asset", related_name="children", null=True)
+    subgroup = fields.ForeignKeyField("models.SystemSubgroup", related_name="assets", null=True)
     commissioning_status = fields.CharField(max_length=50, default="not_started")
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)

@@ -18,6 +18,8 @@ class AssetCreate(BaseModel):
     location_id: Optional[int] = None
     unit_id: Optional[int] = None
     partition_id: Optional[int] = None
+    parent_id: Optional[int] = None
+    subgroup_id: Optional[int] = None
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
@@ -41,6 +43,8 @@ class AssetUpdate(BaseModel):
     type: Optional[str] = None
     status: Optional[Literal["active", "inactive", "maintenance"]] = None
     description: Optional[str] = None
+    parent_id: Optional[int] = None
+    subgroup_id: Optional[int] = None
     location_id: Optional[int] = None
     unit_id: Optional[int] = None
     partition_id: Optional[int] = None
@@ -68,6 +72,9 @@ class AssetOut(BaseModel):
     location_id: Optional[int]
     unit_id: Optional[int]
     partition_id: Optional[int]
+    parent_id: Optional[int]
+    subgroup_id: Optional[int]
+    children_count: int = 0
     manufacturer: Optional[str]
     model: Optional[str]
     serial_number: Optional[str]

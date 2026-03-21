@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import List
+from typing import List, Optional
 from app.core.limiter import limiter
 
 from app.models.document import Document, DocumentRevision, DocumentApproval, DocumentComment, DrawingAsset
@@ -202,7 +202,12 @@ async def analyze_document(
 async def confirm_pin(
     pin_id: int,
     project_id: int,
-    site_id: int = 1,
+    site_id: int,
+    location_id: Optional[int] = None,
+    unit_id: Optional[int] = None,
+    partition_id: Optional[int] = None,
+    parent_id: Optional[int] = None,
+    subgroup_id: Optional[int] = None,
     current_user: ClerkUser = Depends(get_current_user),
 ):
     """
@@ -213,8 +218,11 @@ async def confirm_pin(
     if not pin:
         raise HTTPException(status_code=404, detail="Pin not found")
 
-    # Re-use existing asset if tag already exists in this project
-    existing = await Asset.get_or_none(project_id=project_id, tag=pin.tag, site_id=site_id)
+    # Re-use existing asset if tag already exists in this project at this location
+    existing = await Asset.get_or_none(
+        project_id=project_id, tag=pin.tag, site_id=site_id,
+        location_id=location_id, unit_id=unit_id, partition_id=partition_id,
+    )
     if existing:
         asset = existing
     else:
@@ -225,6 +233,11 @@ async def confirm_pin(
             type=pin.asset_type,
             description=pin.description,
             site_id=site_id,
+            location_id=location_id,
+            unit_id=unit_id,
+            partition_id=partition_id,
+            parent_id=parent_id,
+            subgroup_id=subgroup_id,
         )
 
     pin.asset_id = asset.id
