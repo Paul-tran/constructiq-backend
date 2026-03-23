@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import Optional
 
-from app.core.auth import get_current_user, ClerkUser
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.models.billing import Subscription
 from app.schemas.billing import SubscriptionOut, CheckoutResponse, PortalResponse
 from app.services.stripe_service import (
@@ -17,7 +18,7 @@ FRONTEND_URL = "http://localhost:3000"  # overridden by ALLOWED_ORIGINS in prod
 
 
 @router.get("/subscription", response_model=Optional[SubscriptionOut])
-async def get_subscription(current_user: ClerkUser = Depends(get_current_user)):
+async def get_subscription(current_user: User = Depends(get_current_user)):
     """Return the current user's subscription status. None if no subscription exists yet."""
     return await Subscription.get_or_none(clerk_user_id=current_user.user_id)
 
@@ -25,7 +26,7 @@ async def get_subscription(current_user: ClerkUser = Depends(get_current_user)):
 @router.post("/checkout", response_model=CheckoutResponse)
 async def start_checkout(
     request: Request,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a Stripe Checkout Session with a 14-day free trial.
@@ -44,7 +45,7 @@ async def start_checkout(
 @router.post("/portal", response_model=PortalResponse)
 async def open_portal(
     request: Request,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a Stripe Customer Portal session so the user can manage their
@@ -61,7 +62,7 @@ async def open_portal(
 @router.post("/simulate/{scenario}", tags=["Billing (Dev Only)"])
 async def simulate_billing(
     scenario: str,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     DEV ONLY — simulate a billing state without real Stripe keys.

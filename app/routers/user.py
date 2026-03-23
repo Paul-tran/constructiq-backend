@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException
-from typing import List
+from fastapi import APIRouter, HTTPException, Depends
+from typing import List, Optional
+from pydantic import BaseModel
 
-from app.models.user import Role, RolePermission, ProjectRolePermission, ProjectMember, ProjectInvitation
+from app.models.user import Role, RolePermission, ProjectRolePermission, ProjectMember, ProjectInvitation, User
+from app.core.auth import get_current_user, require_admin
+from app.schemas.auth import UserOut
 from app.schemas.user import (
     RoleCreate, RoleOut,
     RolePermissionCreate, RolePermissionOut,
@@ -86,6 +89,18 @@ async def delete_project_role_permission(project_id: int, perm_id: int):
 
 # --- Project Members ---
 
+@router.get("/projects/{project_id}/members/me")
+async def get_my_membership(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+):
+    member = await ProjectMember.get_or_none(project_id=project_id, user_id=current_user.id)
+    if not member:
+        return {"role": None}
+    await member.fetch_related("role")
+    return {"role": member.role.name, "member_id": member.id}
+
+
 @router.get("/projects/{project_id}/members", response_model=List[ProjectMemberOut])
 async def list_project_members(project_id: int):
     return await ProjectMember.filter(project_id=project_id)
@@ -147,3 +162,62 @@ async def delete_invitation(project_id: int, inv_id: int):
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
     await invitation.delete()
+
+
+# --- Admin: User Management ---
+
+class AdminUserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_admin: Optional[bool] = None
+
+
+@router.get("/admin/users", response_model=List[UserOut])
+async def admin_list_users(
+    _admin: User = Depends(require_admin),
+):
+    return [UserOut.model_validate(u, from_attributes=True) for u in await User.all().order_by("id")]
+
+
+@router.get("/admin/users/{user_id}", response_model=UserOut)
+async def admin_get_user(
+    user_id: int,
+    _admin: User = Depends(require_admin),
+):
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return UserOut.model_validate(user, from_attributes=True)
+
+
+@router.patch("/admin/users/{user_id}", response_model=UserOut)
+async def admin_update_user(
+    user_id: int,
+    data: AdminUserUpdate,
+    _admin: User = Depends(require_admin),
+):
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates = data.model_dump(exclude_none=True)
+    if "email" in updates:
+        clash = await User.get_or_none(email=updates["email"])
+        if clash and clash.id != user_id:
+            raise HTTPException(status_code=400, detail="Email already in use")
+    await user.update_from_dict(updates).save()
+    return UserOut.model_validate(user, from_attributes=True)
+
+
+@router.delete("/admin/users/{user_id}", status_code=204)
+async def admin_delete_user(
+    user_id: int,
+    current_admin: User = Depends(require_admin),
+):
+    if user_id == current_admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    user = await User.get_or_none(id=user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    await user.delete()

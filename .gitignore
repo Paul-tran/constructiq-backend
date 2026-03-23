@@ -31,4 +31,4 @@ build/
 minio_data/
 
 # Aerich migrations temp
-aerich.ini
+aerich.ini.mcp.json

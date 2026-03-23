@@ -44,6 +44,10 @@ class DocumentOut(BaseModel):
     location_id: Optional[int]
     unit_id: Optional[int]
     partition_id: Optional[int]
+    site_name: Optional[str] = None
+    location_name: Optional[str] = None
+    unit_name: Optional[str] = None
+    partition_name: Optional[str] = None
     uploaded_by: str
     created_at: datetime
     updated_at: datetime
@@ -165,6 +169,10 @@ class DrawingAssetOut(BaseModel):
     page_number: int
     status: str
     created_at: datetime
+    location_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    location_name: Optional[str] = None
+    unit_name: Optional[str] = None
 
     class Config:
         from_attributes = True

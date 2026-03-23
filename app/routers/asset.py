@@ -3,6 +3,7 @@ from typing import List, Optional
 
 from app.models.asset import Asset, AssetProcurementLine
 from app.models.document import DrawingAsset, Document
+from app.models.system import SystemGroup, SystemSubgroup
 from app.schemas.asset import (
     AssetCreate, AssetUpdate, AssetOut,
     AssetProcurementLineCreate, AssetProcurementLineOut,
@@ -15,6 +16,9 @@ async def _build_asset_out(asset: Asset) -> AssetOut:
     children_count = await Asset.filter(parent_id=asset.id).count()
     data = AssetOut.model_validate(asset, from_attributes=True)
     data.children_count = children_count
+    if asset.parent_id:
+        parent = await Asset.get_or_none(id=asset.parent_id)
+        data.parent_tag = parent.tag if parent else None
     return data
 
 
@@ -30,6 +34,8 @@ async def list_assets(
     type: Optional[str] = None,
     parent_id: Optional[int] = Query(None, description="Filter by parent asset ID; use 0 for root assets only"),
     subgroup_id: Optional[int] = None,
+    group_id: Optional[int] = None,
+    discipline_id: Optional[int] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ):
@@ -44,6 +50,13 @@ async def list_assets(
         filters["type"] = type
     if subgroup_id:
         filters["subgroup_id"] = subgroup_id
+    elif group_id:
+        sg_ids = await SystemSubgroup.filter(group_id=group_id).values_list("id", flat=True)
+        filters["subgroup_id__in"] = sg_ids if sg_ids else [-1]
+    elif discipline_id:
+        g_ids = await SystemGroup.filter(discipline_id=discipline_id).values_list("id", flat=True)
+        sg_ids = await SystemSubgroup.filter(group_id__in=g_ids).values_list("id", flat=True) if g_ids else []
+        filters["subgroup_id__in"] = sg_ids if sg_ids else [-1]
     if parent_id == 0:
         filters["parent_id"] = None  # root assets only
     elif parent_id:

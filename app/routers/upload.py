@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
 from pydantic import BaseModel
 
-from app.core.auth import get_current_user, ClerkUser
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.core.limiter import limiter
 from app.services.storage import make_file_key, upload_file, get_presigned_url, delete_file
 
@@ -40,7 +41,7 @@ async def upload(
     module: str,
     project_id: int,
     file: UploadFile = File(...),
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Upload a file to storage.
@@ -77,7 +78,7 @@ async def upload(
 async def get_file_url(
     file_key: str,
     expires: int = 3600,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Get a presigned URL to download or view a file.
@@ -92,7 +93,7 @@ async def get_file_url(
 @router.delete("/delete", status_code=204)
 async def delete(
     file_key: str,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a file from storage by its file_key."""
     delete_file(file_key)

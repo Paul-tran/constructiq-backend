@@ -66,7 +66,7 @@ class ProjectRolePermissionOut(BaseModel):
 
 class ProjectMemberCreate(BaseModel):
     project_id: int
-    clerk_user_id: str
+    user_id: int
     company_id: Optional[int] = None
     role_id: int
 
@@ -74,7 +74,7 @@ class ProjectMemberCreate(BaseModel):
 class ProjectMemberOut(BaseModel):
     id: int
     project_id: int
-    clerk_user_id: str
+    user_id: int
     company_id: Optional[int]
     role_id: int
     status: str

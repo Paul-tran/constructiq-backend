@@ -4,6 +4,7 @@ from app.core.limiter import limiter
 
 from app.models.document import Document, DocumentRevision, DocumentApproval, DocumentComment, DrawingAsset
 from app.models.asset import Asset
+from app.models.geography import Site, Location, Unit, Partition
 from app.schemas.document import (
     DocumentCreate, DocumentUpdate, DocumentOut,
     DocumentRevisionCreate, DocumentRevisionOut,
@@ -11,24 +12,43 @@ from app.schemas.document import (
     DocumentCommentCreate, DocumentCommentOut,
     DrawingAssetCreate, DrawingAssetUpdate, DrawingAssetOut,
 )
-from app.core.auth import get_current_user, ClerkUser
+from app.core.auth import get_current_user
+from app.models.user import User
 from app.services.storage import get_presigned_url
 from app.services.ai import analyze_drawing_page
 
 router = APIRouter(tags=["Documents"])
 
 
+async def _build_document_out(doc: Document) -> DocumentOut:
+    out = DocumentOut.model_validate(doc, from_attributes=True)
+    if doc.site_id:
+        site = await Site.get_or_none(id=doc.site_id)
+        out.site_name = site.name if site else None
+    if doc.location_id:
+        loc = await Location.get_or_none(id=doc.location_id)
+        out.location_name = loc.name if loc else None
+    if doc.unit_id:
+        unit = await Unit.get_or_none(id=doc.unit_id)
+        out.unit_name = unit.name if unit else None
+    if doc.partition_id:
+        part = await Partition.get_or_none(id=doc.partition_id)
+        out.partition_name = part.name if part else None
+    return out
+
+
 # --- Documents ---
 
 @router.get("/projects/{project_id}/documents", response_model=List[DocumentOut])
 async def list_documents(project_id: int):
-    return await Document.filter(project_id=project_id)
+    docs = await Document.filter(project_id=project_id)
+    return [await _build_document_out(d) for d in docs]
 
 
 @router.post("/projects/{project_id}/documents", response_model=DocumentOut, status_code=201)
 async def create_document(project_id: int, data: DocumentCreate):
     doc = await Document.create(project_id=project_id, **data.model_dump(exclude={"project_id"}))
-    return doc
+    return await _build_document_out(doc)
 
 
 @router.get("/documents/{doc_id}", response_model=DocumentOut)
@@ -36,7 +56,7 @@ async def get_document(doc_id: int):
     doc = await Document.get_or_none(id=doc_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return doc
+    return await _build_document_out(doc)
 
 
 @router.patch("/documents/{doc_id}", response_model=DocumentOut)
@@ -45,7 +65,7 @@ async def update_document(doc_id: int, data: DocumentUpdate):
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     await doc.update_from_dict(data.model_dump(exclude_none=True)).save()
-    return doc
+    return await _build_document_out(doc)
 
 
 @router.delete("/documents/{doc_id}", status_code=204)
@@ -113,9 +133,26 @@ async def delete_comment(comment_id: int):
 
 # --- Drawing Asset Pins ---
 
+async def _enrich_pin(pin: DrawingAsset) -> DrawingAssetOut:
+    out = DrawingAssetOut.model_validate(pin, from_attributes=True)
+    if pin.asset_id:
+        asset = await Asset.get_or_none(id=pin.asset_id)
+        if asset:
+            out.location_id = asset.location_id
+            out.unit_id = asset.unit_id
+            if asset.location_id:
+                loc = await Location.get_or_none(id=asset.location_id)
+                out.location_name = loc.name if loc else None
+            if asset.unit_id:
+                unit = await Unit.get_or_none(id=asset.unit_id)
+                out.unit_name = unit.name if unit else None
+    return out
+
+
 @router.get("/documents/{doc_id}/pins", response_model=List[DrawingAssetOut])
 async def list_pins(doc_id: int):
-    return await DrawingAsset.filter(document_id=doc_id)
+    pins = await DrawingAsset.filter(document_id=doc_id)
+    return [await _enrich_pin(p) for p in pins]
 
 
 @router.post("/documents/{doc_id}/pins", response_model=DrawingAssetOut, status_code=201)
@@ -157,7 +194,7 @@ async def analyze_document(
     request: Request,
     doc_id: int,
     page: int = 1,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Run Claude Vision on a specific page of a document.
@@ -208,7 +245,7 @@ async def confirm_pin(
     partition_id: Optional[int] = None,
     parent_id: Optional[int] = None,
     subgroup_id: Optional[int] = None,
-    current_user: ClerkUser = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Confirm a detected pin: creates an Asset record and links it to the pin.

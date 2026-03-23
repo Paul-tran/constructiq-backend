@@ -73,6 +73,7 @@ class AssetOut(BaseModel):
     unit_id: Optional[int]
     partition_id: Optional[int]
     parent_id: Optional[int]
+    parent_tag: Optional[str] = None
     subgroup_id: Optional[int]
     children_count: int = 0
     manufacturer: Optional[str]

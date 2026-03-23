@@ -14,7 +14,8 @@ from app.schemas.workorder import (
     PMChecklistItemUpdate, InspectionChecklistItemUpdate, OperationsStepUpdate,
     PMChecklistItemCreate, InspectionChecklistItemCreate, OperationsStepCreate,
 )
-from app.core.auth import get_current_user, ClerkUser
+from app.core.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter(tags=["work-orders"])
 
@@ -87,7 +88,7 @@ async def _log_system_comment(wo_id: int, author: str, message: str):
 # ---------------------------------------------------------------------------
 
 @router.get("/projects/{project_id}/work-orders", response_model=List[WorkOrderOut])
-async def list_work_orders(project_id: int, user: ClerkUser = Depends(get_current_user)):
+async def list_work_orders(project_id: int, user: User = Depends(get_current_user)):
     wos = await WorkOrder.filter(project_id=project_id).order_by("-created_at")
     results = []
     for wo in wos:
@@ -96,7 +97,7 @@ async def list_work_orders(project_id: int, user: ClerkUser = Depends(get_curren
 
 
 @router.post("/projects/{project_id}/work-orders", response_model=WorkOrderOut, status_code=201)
-async def create_work_order(project_id: int, body: WorkOrderCreate, user: ClerkUser = Depends(get_current_user)):
+async def create_work_order(project_id: int, body: WorkOrderCreate, user: User = Depends(get_current_user)):
     # Validate geography/asset requirements from WO type
     wo_type = await WOType.get_or_none(id=body.wo_type_id)
     if not wo_type:
@@ -174,7 +175,7 @@ async def create_work_order(project_id: int, body: WorkOrderCreate, user: ClerkU
 
 
 @router.get("/work-orders/{wo_id}", response_model=WorkOrderOut)
-async def get_work_order(wo_id: int, user: ClerkUser = Depends(get_current_user)):
+async def get_work_order(wo_id: int, user: User = Depends(get_current_user)):
     wo = await WorkOrder.get_or_none(id=wo_id)
     if not wo:
         raise HTTPException(404, "Work order not found")
@@ -182,7 +183,7 @@ async def get_work_order(wo_id: int, user: ClerkUser = Depends(get_current_user)
 
 
 @router.patch("/work-orders/{wo_id}", response_model=WorkOrderOut)
-async def update_work_order(wo_id: int, body: WorkOrderUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_work_order(wo_id: int, body: WorkOrderUpdate, user: User = Depends(get_current_user)):
     wo = await WorkOrder.get_or_none(id=wo_id)
     if not wo:
         raise HTTPException(404, "Work order not found")
@@ -198,7 +199,7 @@ async def update_work_order(wo_id: int, body: WorkOrderUpdate, user: ClerkUser =
 
 
 @router.delete("/work-orders/{wo_id}", status_code=204)
-async def delete_work_order(wo_id: int, user: ClerkUser = Depends(get_current_user)):
+async def delete_work_order(wo_id: int, user: User = Depends(get_current_user)):
     wo = await WorkOrder.get_or_none(id=wo_id)
     if not wo:
         raise HTTPException(404, "Work order not found")
@@ -210,12 +211,12 @@ async def delete_work_order(wo_id: int, user: ClerkUser = Depends(get_current_us
 # ---------------------------------------------------------------------------
 
 @router.get("/work-orders/{wo_id}/comments", response_model=List[CommentOut])
-async def list_comments(wo_id: int, user: ClerkUser = Depends(get_current_user)):
+async def list_comments(wo_id: int, user: User = Depends(get_current_user)):
     return await WorkOrderComment.filter(work_order_id=wo_id).order_by("created_at")
 
 
 @router.post("/work-orders/{wo_id}/comments", response_model=CommentOut, status_code=201)
-async def add_comment(wo_id: int, body: CommentCreate, user: ClerkUser = Depends(get_current_user)):
+async def add_comment(wo_id: int, body: CommentCreate, user: User = Depends(get_current_user)):
     wo = await WorkOrder.get_or_none(id=wo_id)
     if not wo:
         raise HTTPException(404, "Work order not found")
@@ -227,7 +228,7 @@ async def add_comment(wo_id: int, body: CommentCreate, user: ClerkUser = Depends
 # ---------------------------------------------------------------------------
 
 @router.patch("/work-orders/{wo_id}/corrective-detail", response_model=WorkOrderOut)
-async def update_corrective_detail(wo_id: int, body: CorrectiveDetailUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_corrective_detail(wo_id: int, body: CorrectiveDetailUpdate, user: User = Depends(get_current_user)):
     cd = await WOCorrectiveDetail.get_or_none(work_order_id=wo_id)
     if not cd:
         raise HTTPException(404, "Corrective detail not found")
@@ -237,7 +238,7 @@ async def update_corrective_detail(wo_id: int, body: CorrectiveDetailUpdate, use
 
 
 @router.patch("/work-orders/{wo_id}/pm-detail", response_model=WorkOrderOut)
-async def update_pm_detail(wo_id: int, body: PMDetailUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_pm_detail(wo_id: int, body: PMDetailUpdate, user: User = Depends(get_current_user)):
     pd = await WOPMDetail.get_or_none(work_order_id=wo_id)
     if not pd:
         raise HTTPException(404, "PM detail not found")
@@ -247,7 +248,7 @@ async def update_pm_detail(wo_id: int, body: PMDetailUpdate, user: ClerkUser = D
 
 
 @router.patch("/work-orders/{wo_id}/inspection-detail", response_model=WorkOrderOut)
-async def update_inspection_detail(wo_id: int, body: InspectionDetailUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_inspection_detail(wo_id: int, body: InspectionDetailUpdate, user: User = Depends(get_current_user)):
     idd = await WOInspectionDetail.get_or_none(work_order_id=wo_id)
     if not idd:
         raise HTTPException(404, "Inspection detail not found")
@@ -257,7 +258,7 @@ async def update_inspection_detail(wo_id: int, body: InspectionDetailUpdate, use
 
 
 @router.patch("/work-orders/{wo_id}/operations-detail", response_model=WorkOrderOut)
-async def update_operations_detail(wo_id: int, body: OperationsDetailUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_operations_detail(wo_id: int, body: OperationsDetailUpdate, user: User = Depends(get_current_user)):
     od = await WOOperationsDetail.get_or_none(work_order_id=wo_id)
     if not od:
         raise HTTPException(404, "Operations detail not found")
@@ -271,7 +272,7 @@ async def update_operations_detail(wo_id: int, body: OperationsDetailUpdate, use
 # ---------------------------------------------------------------------------
 
 @router.patch("/pm-checklist-items/{item_id}", response_model=PMChecklistItemUpdate)
-async def update_pm_checklist_item(item_id: int, body: PMChecklistItemUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_pm_checklist_item(item_id: int, body: PMChecklistItemUpdate, user: User = Depends(get_current_user)):
     item = await WOPMChecklistItem.get_or_none(id=item_id)
     if not item:
         raise HTTPException(404, "Item not found")
@@ -281,12 +282,12 @@ async def update_pm_checklist_item(item_id: int, body: PMChecklistItemUpdate, us
 
 
 @router.post("/pm-details/{detail_id}/checklist-items", status_code=201)
-async def add_pm_checklist_item(detail_id: int, body: PMChecklistItemCreate, user: ClerkUser = Depends(get_current_user)):
+async def add_pm_checklist_item(detail_id: int, body: PMChecklistItemCreate, user: User = Depends(get_current_user)):
     return await WOPMChecklistItem.create(pm_detail_id=detail_id, **body.model_dump())
 
 
 @router.delete("/pm-checklist-items/{item_id}", status_code=204)
-async def delete_pm_checklist_item(item_id: int, user: ClerkUser = Depends(get_current_user)):
+async def delete_pm_checklist_item(item_id: int, user: User = Depends(get_current_user)):
     item = await WOPMChecklistItem.get_or_none(id=item_id)
     if not item:
         raise HTTPException(404, "Item not found")
@@ -294,7 +295,7 @@ async def delete_pm_checklist_item(item_id: int, user: ClerkUser = Depends(get_c
 
 
 @router.patch("/inspection-checklist-items/{item_id}")
-async def update_inspection_checklist_item(item_id: int, body: InspectionChecklistItemUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_inspection_checklist_item(item_id: int, body: InspectionChecklistItemUpdate, user: User = Depends(get_current_user)):
     item = await WOInspectionChecklistItem.get_or_none(id=item_id)
     if not item:
         raise HTTPException(404, "Item not found")
@@ -304,12 +305,12 @@ async def update_inspection_checklist_item(item_id: int, body: InspectionCheckli
 
 
 @router.post("/inspection-details/{detail_id}/checklist-items", status_code=201)
-async def add_inspection_checklist_item(detail_id: int, body: InspectionChecklistItemCreate, user: ClerkUser = Depends(get_current_user)):
+async def add_inspection_checklist_item(detail_id: int, body: InspectionChecklistItemCreate, user: User = Depends(get_current_user)):
     return await WOInspectionChecklistItem.create(inspection_detail_id=detail_id, **body.model_dump())
 
 
 @router.delete("/inspection-checklist-items/{item_id}", status_code=204)
-async def delete_inspection_checklist_item(item_id: int, user: ClerkUser = Depends(get_current_user)):
+async def delete_inspection_checklist_item(item_id: int, user: User = Depends(get_current_user)):
     item = await WOInspectionChecklistItem.get_or_none(id=item_id)
     if not item:
         raise HTTPException(404, "Item not found")
@@ -317,7 +318,7 @@ async def delete_inspection_checklist_item(item_id: int, user: ClerkUser = Depen
 
 
 @router.patch("/operations-steps/{step_id}")
-async def update_operations_step(step_id: int, body: OperationsStepUpdate, user: ClerkUser = Depends(get_current_user)):
+async def update_operations_step(step_id: int, body: OperationsStepUpdate, user: User = Depends(get_current_user)):
     step = await WOOperationsStep.get_or_none(id=step_id)
     if not step:
         raise HTTPException(404, "Step not found")
@@ -327,12 +328,12 @@ async def update_operations_step(step_id: int, body: OperationsStepUpdate, user:
 
 
 @router.post("/operations-details/{detail_id}/steps", status_code=201)
-async def add_operations_step(detail_id: int, body: OperationsStepCreate, user: ClerkUser = Depends(get_current_user)):
+async def add_operations_step(detail_id: int, body: OperationsStepCreate, user: User = Depends(get_current_user)):
     return await WOOperationsStep.create(operations_detail_id=detail_id, **body.model_dump())
 
 
 @router.delete("/operations-steps/{step_id}", status_code=204)
-async def delete_operations_step(step_id: int, user: ClerkUser = Depends(get_current_user)):
+async def delete_operations_step(step_id: int, user: User = Depends(get_current_user)):
     step = await WOOperationsStep.get_or_none(id=step_id)
     if not step:
         raise HTTPException(404, "Step not found")

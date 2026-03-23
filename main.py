@@ -13,7 +13,7 @@ import logging
 from app.core.database import TORTOISE_ORM
 from app.core.auth import get_current_user
 from app.core.limiter import limiter
-from app.routers import geography, company, project, user, document, asset, commissioning, upload, billing, workorder, wo_types, system
+from app.routers import geography, company, project, user, document, asset, commissioning, upload, billing, workorder, wo_types, system, auth
 
 load_dotenv()
 
@@ -74,6 +74,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 # --- Routers ---
 protected = {"dependencies": [Depends(get_current_user)]}
 
+app.include_router(auth.router, prefix="/api/v1")  # unprotected
 app.include_router(geography.router, prefix="/api/v1", **protected)
 app.include_router(company.router, prefix="/api/v1", **protected)
 app.include_router(project.router, prefix="/api/v1", **protected)

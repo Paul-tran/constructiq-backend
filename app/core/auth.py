@@ -1,92 +1,126 @@
 import os
-import time
-import httpx
-from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from fastapi import Cookie, Depends, HTTPException, Response, status
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
-CLERK_JWKS_URL = os.getenv("CLERK_JWKS_URL", "")
+from app.models.user import User
 
-security = HTTPBearer()
+JWT_SECRET = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
-# Simple in-memory JWKS cache with TTL (1 hour)
-_jwks_cache: Optional[dict] = None
-_jwks_fetched_at: float = 0
-_JWKS_TTL = 3600
-
-
-@dataclass
-class ClerkUser:
-    user_id: str   # Clerk's `sub` claim — matches clerk_user_id in our models
-    email: Optional[str] = None
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-async def _fetch_jwks() -> dict:
-    global _jwks_cache, _jwks_fetched_at
+# --- Password helpers ---
 
-    now = time.time()
-    if _jwks_cache and (now - _jwks_fetched_at) < _JWKS_TTL:
-        return _jwks_cache
-
-    if not CLERK_JWKS_URL:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="CLERK_JWKS_URL is not configured",
-        )
-
-    async with httpx.AsyncClient() as client:
-        response = await client.get(CLERK_JWKS_URL, timeout=10)
-        response.raise_for_status()
-        _jwks_cache = response.json()
-        _jwks_fetched_at = now
-
-    return _jwks_cache
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
 
 
-async def verify_clerk_token(token: str) -> ClerkUser:
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+
+# --- JWT helpers ---
+
+def _create_token(data: dict, expires_delta: timedelta) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + expires_delta
+    to_encode["exp"] = expire
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=ALGORITHM)
+
+
+def create_access_token(user_id: int) -> str:
+    return _create_token(
+        {"sub": str(user_id), "type": "access"},
+        timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+
+def create_refresh_token(user_id: int) -> str:
+    return _create_token(
+        {"sub": str(user_id), "type": "refresh"},
+        timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+
+def decode_token(token: str) -> dict:
     try:
-        # Peek at the header to find which key to use
-        header = jwt.get_unverified_header(token)
-        kid = header.get("kid")
-
-        jwks = await _fetch_jwks()
-
-        signing_key = next(
-            (k for k in jwks.get("keys", []) if k.get("kid") == kid),
-            None,
-        )
-        if not signing_key:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No matching signing key found",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
-        payload = jwt.decode(
-            token,
-            signing_key,
-            algorithms=["RS256"],
-            options={"verify_aud": False},  # Clerk JWTs have no audience by default
-        )
-
-        return ClerkUser(
-            user_id=payload["sub"],
-            email=payload.get("email"),
-        )
-
-    except JWTError as e:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {e}",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Invalid or expired token",
         )
 
 
+# --- Cookie helpers ---
+
+def set_auth_cookies(response: Response, user_id: int) -> None:
+    access_token = create_access_token(user_id)
+    refresh_token = create_refresh_token(user_id)
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=os.getenv("ENVIRONMENT", "development") == "production",
+        samesite="lax",
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=os.getenv("ENVIRONMENT", "development") == "production",
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        path="/api/v1/auth/refresh",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/api/v1/auth/refresh")
+
+
+# --- FastAPI dependency ---
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> ClerkUser:
-    """FastAPI dependency — inject this into any route to require auth."""
-    return await verify_clerk_token(credentials.credentials)
+    access_token: Optional[str] = Cookie(default=None),
+) -> User:
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    payload = decode_token(access_token)
+    if payload.get("type") != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type",
+        )
+    user_id = int(payload["sub"])
+    user = await User.get_or_none(id=user_id)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+        )
+    return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return current_user
