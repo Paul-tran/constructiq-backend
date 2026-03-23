@@ -25,6 +25,8 @@ class UserOut(BaseModel):
     is_verified: bool
     is_admin: bool = False
     created_at: datetime
+    role_id: Optional[int] = None
+    role_name: Optional[str] = None
 
     class Config:
         from_attributes = True

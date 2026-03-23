@@ -35,6 +35,17 @@ async def send_email(to: str, subject: str, body_html: str) -> None:
         raise
 
 
+async def send_invite_email(to: str, invited_by: str, token: str) -> None:
+    set_password_url = f"{FRONTEND_URL}/reset-password?token={token}"
+    body = f"""
+    <p>You've been invited to join ConstructIQ by <strong>{invited_by}</strong>.</p>
+    <p><a href="{set_password_url}" style="background:#835500;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:bold;">Set Your Password & Get Started</a></p>
+    <p>This invitation link expires in 24 hours.</p>
+    <p>If you weren't expecting this invitation, you can safely ignore this email.</p>
+    """
+    await send_email(to, "You've been invited to ConstructIQ", body)
+
+
 async def send_password_reset_email(to: str, token: str) -> None:
     reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
     body = f"""
