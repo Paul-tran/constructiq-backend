@@ -11,14 +11,14 @@ class WOTypeCreate(BaseModel):
     name: str
     category: Literal["corrective", "preventive", "inspection", "operations"]
     asset_required: bool = False
-    geography_required: bool = True
+    geography_levels_required: List[str] = []  # e.g. ["site", "location", "unit", "partition"]
 
 
 class WOTypeUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[Literal["corrective", "preventive", "inspection", "operations"]] = None
     asset_required: Optional[bool] = None
-    geography_required: Optional[bool] = None
+    geography_levels_required: Optional[List[str]] = None
     is_active: Optional[bool] = None
 
 
@@ -28,7 +28,7 @@ class WOTypeOut(BaseModel):
     name: str
     category: str
     asset_required: bool
-    geography_required: bool
+    geography_levels_required: List[str]
     is_active: bool
     created_at: datetime
 

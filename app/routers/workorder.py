@@ -102,8 +102,10 @@ async def create_work_order(project_id: int, body: WorkOrderCreate, user: User =
     wo_type = await WOType.get_or_none(id=body.wo_type_id)
     if not wo_type:
         raise HTTPException(404, "WO type not found")
-    if wo_type.geography_required and not body.site_id:
-        raise HTTPException(422, f"A site is required for '{wo_type.name}' work orders")
+    geo_field_map = {"site": body.site_id, "location": body.location_id, "unit": body.unit_id, "partition": body.partition_id}
+    for level in (wo_type.geography_levels_required or []):
+        if not geo_field_map.get(level):
+            raise HTTPException(422, f"A {level} is required for '{wo_type.name}' work orders")
     if wo_type.asset_required and not body.asset_id:
         raise HTTPException(422, f"An asset is required for '{wo_type.name}' work orders")
 

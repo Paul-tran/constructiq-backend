@@ -8,7 +8,7 @@ class WOType(models.Model):
     name = fields.CharField(max_length=255)
     category = fields.CharField(max_length=30)   # corrective | preventive | inspection | operations
     asset_required = fields.BooleanField(default=False)
-    geography_required = fields.BooleanField(default=True)
+    geography_levels_required = fields.JSONField(default=list)  # e.g. ["site", "location", "unit", "partition"]
     is_active = fields.BooleanField(default=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
@@ -38,6 +38,7 @@ class WorkOrder(models.Model):
     completed_date = fields.DateField(null=True)
     labour_hours = fields.DecimalField(max_digits=6, decimal_places=2, null=True)
     notes = fields.TextField(default="")
+    pm_activity = fields.ForeignKeyField("models.PMActivity", related_name="work_orders", null=True)
     created_by = fields.CharField(max_length=255)
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
@@ -138,3 +139,43 @@ class WOOperationsStep(models.Model):
 
     class Meta:
         table = "wo_operations_steps"
+
+
+# --- PM Schedules ---
+
+class PMSchedule(models.Model):
+    id = fields.IntField(pk=True)
+    project = fields.ForeignKeyField("models.Project", related_name="pm_schedules")
+    name = fields.CharField(max_length=255)
+    asset_id = fields.IntField(null=True)
+    site_id = fields.IntField(null=True)
+    location_id = fields.IntField(null=True)
+    unit_id = fields.IntField(null=True)
+    partition_id = fields.IntField(null=True)
+    assigned_to = fields.CharField(max_length=255, null=True)
+    lead_days = fields.IntField(default=7)
+    start_date = fields.DateField()
+    is_active = fields.BooleanField(default=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "pm_schedules"
+
+
+class PMActivity(models.Model):
+    id = fields.IntField(pk=True)
+    schedule = fields.ForeignKeyField("models.PMSchedule", related_name="activities")
+    wo_type = fields.ForeignKeyField("models.WOType", related_name="pm_activities", null=True)
+    name = fields.CharField(max_length=255)
+    frequency = fields.CharField(max_length=50)   # weekly|monthly|quarterly|annually|custom_days
+    interval_days = fields.IntField(null=True)     # only used when frequency=custom_days
+    end_date = fields.DateField(null=True)
+    description = fields.TextField(default="")
+    next_due_date = fields.DateField(null=True)
+    last_generated_date = fields.DateField(null=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    updated_at = fields.DatetimeField(auto_now=True)
+
+    class Meta:
+        table = "pm_activities"
