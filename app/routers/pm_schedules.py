@@ -6,6 +6,7 @@ from dateutil.relativedelta import relativedelta
 import os
 
 from app.models.workorder import PMSchedule, PMActivity, WorkOrder, WOType
+from app.models.asset import Asset
 from app.core.auth import get_current_user
 from fastapi import Depends
 from app.models.user import User
@@ -54,7 +55,7 @@ class PMActivityOut(BaseModel):
 
 class PMScheduleCreate(BaseModel):
     name: str
-    asset_id: Optional[int] = None
+    asset_ids: List[int] = []
     site_id: Optional[int] = None
     location_id: Optional[int] = None
     unit_id: Optional[int] = None
@@ -68,7 +69,6 @@ class PMScheduleCreate(BaseModel):
 
 class PMScheduleUpdate(BaseModel):
     name: Optional[str] = None
-    asset_id: Optional[int] = None
     site_id: Optional[int] = None
     location_id: Optional[int] = None
     unit_id: Optional[int] = None
@@ -79,11 +79,20 @@ class PMScheduleUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class AssetRef(BaseModel):
+    id: int
+    tag: str
+    name: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+
 class PMScheduleOut(BaseModel):
     id: int
     project_id: int
     name: str
-    asset_id: Optional[int]
+    assets: List[AssetRef] = []
     site_id: Optional[int]
     location_id: Optional[int]
     unit_id: Optional[int]
@@ -126,11 +135,12 @@ async def _activity_out(activity: PMActivity) -> PMActivityOut:
 async def _schedule_out(schedule: PMSchedule) -> dict:
     activities = await PMActivity.filter(schedule_id=schedule.id).order_by("created_at")
     acts_out = [await _activity_out(a) for a in activities]
+    assets = await schedule.assets.all()
     return {
         "id": schedule.id,
         "project_id": schedule.project_id,
         "name": schedule.name,
-        "asset_id": schedule.asset_id,
+        "assets": [{"id": a.id, "tag": a.tag, "name": a.name} for a in assets],
         "site_id": schedule.site_id,
         "location_id": schedule.location_id,
         "unit_id": schedule.unit_id,
@@ -162,7 +172,6 @@ async def create_pm_schedule(
     schedule = await PMSchedule.create(
         project_id=project_id,
         name=data.name,
-        asset_id=data.asset_id,
         site_id=data.site_id,
         location_id=data.location_id,
         unit_id=data.unit_id,
@@ -172,6 +181,9 @@ async def create_pm_schedule(
         start_date=data.start_date,
         is_active=data.is_active,
     )
+    if data.asset_ids:
+        assets = await Asset.filter(id__in=data.asset_ids)
+        await schedule.assets.add(*assets)
     for act in data.activities:
         await PMActivity.create(
             schedule_id=schedule.id,
@@ -288,6 +300,7 @@ async def generate_work_orders(
 
     today = date.today()
     activities = await PMActivity.filter(schedule_id=schedule_id)
+    schedule_assets = await schedule.assets.all()
     created_ids = []
 
     for activity in activities:
@@ -309,24 +322,27 @@ async def generate_work_orders(
         if not wo_type_id:
             continue  # no PM work order type configured
 
-        wo = await WorkOrder.create(
-            project_id=schedule.project_id,
-            wo_type_id=wo_type_id,
-            pm_activity_id=activity.id,
-            title=f"[PM] {activity.name}",
-            description=activity.description,
-            priority="medium",
-            status="open",
-            site_id=schedule.site_id,
-            location_id=schedule.location_id,
-            unit_id=schedule.unit_id,
-            partition_id=schedule.partition_id,
-            asset_id=schedule.asset_id,
-            assigned_to=schedule.assigned_to,
-            due_date=due,
-            created_by=current_user.email,
-        )
-        created_ids.append(wo.id)
+        # Create one WO per asset (or one unlinked WO if no assets assigned)
+        asset_ids_for_wo = [a.id for a in schedule_assets] if schedule_assets else [None]
+        for asset_id in asset_ids_for_wo:
+            wo = await WorkOrder.create(
+                project_id=schedule.project_id,
+                wo_type_id=wo_type_id,
+                pm_activity_id=activity.id,
+                title=f"[PM] {activity.name}",
+                description=activity.description,
+                priority="medium",
+                status="open",
+                site_id=schedule.site_id,
+                location_id=schedule.location_id,
+                unit_id=schedule.unit_id,
+                partition_id=schedule.partition_id,
+                asset_id=asset_id,
+                assigned_to=schedule.assigned_to,
+                due_date=due,
+                created_by=current_user.email,
+            )
+            created_ids.append(wo.id)
 
         # Advance next_due_date
         activity.last_generated_date = today
@@ -353,3 +369,35 @@ async def get_schedule_history(schedule_id: int, _: User = Depends(get_current_u
         }
         for wo in wos
     ]
+
+
+# ── Schedule Asset Management ──────────────────────────────────────────────────
+
+@router.post("/pm-schedules/{schedule_id}/assets/{asset_id}", status_code=201)
+async def add_schedule_asset(
+    schedule_id: int,
+    asset_id: int,
+    _: User = Depends(get_current_user),
+):
+    schedule = await PMSchedule.get_or_none(id=schedule_id)
+    if not schedule:
+        raise HTTPException(404, "Schedule not found")
+    asset = await Asset.get_or_none(id=asset_id)
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+    await schedule.assets.add(asset)
+    return await _schedule_out(schedule)
+
+
+@router.delete("/pm-schedules/{schedule_id}/assets/{asset_id}", status_code=204)
+async def remove_schedule_asset(
+    schedule_id: int,
+    asset_id: int,
+    _: User = Depends(get_current_user),
+):
+    schedule = await PMSchedule.get_or_none(id=schedule_id)
+    if not schedule:
+        raise HTTPException(404, "Schedule not found")
+    asset = await Asset.get_or_none(id=asset_id)
+    if asset:
+        await schedule.assets.remove(asset)

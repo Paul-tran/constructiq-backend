@@ -147,7 +147,13 @@ class PMSchedule(models.Model):
     id = fields.IntField(pk=True)
     project = fields.ForeignKeyField("models.Project", related_name="pm_schedules")
     name = fields.CharField(max_length=255)
-    asset_id = fields.IntField(null=True)
+    assets = fields.ManyToManyField(
+        "models.Asset",
+        related_name="pm_schedules",
+        through="pm_schedule_assets",
+        forward_key="asset_id",
+        backward_key="schedule_id",
+    )
     site_id = fields.IntField(null=True)
     location_id = fields.IntField(null=True)
     unit_id = fields.IntField(null=True)
